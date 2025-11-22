@@ -126,7 +126,7 @@ class LKAS:
         center_y_ratio = 0.55     # 중앙점 세로 위치(화면 높이의 55%)
         up_ratio = 0.50           # 중앙점에서 위로 지울 높이 비율
         down_ratio = 0.50         # 중앙점에서 아래로 지울 높이 비율
-        half_width_ratio = 0.40   # 중앙 사각형의 좌우 반폭 비율
+        half_width_ratio = 0.30   # 중앙 사각형의 좌우 반폭 비율
 
         # 1) 기본 이진화
         gray = cv2.cvtColor(blend_line, cv2.COLOR_BGR2GRAY)
@@ -441,7 +441,7 @@ class LKAS:
         img = cv2.resize(img, (w // 2, h // 2))
 
         # 2) 윈도우 파라미터
-        self.nwindows = 8
+        self.nwindows = 10
         self.window_height = img.shape[0] // self.nwindows
 
         # 3) 파이프라인: warp → 색 검출 → 이진화
