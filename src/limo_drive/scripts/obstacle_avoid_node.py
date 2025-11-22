@@ -94,7 +94,7 @@ class GapAndEmergencyAvoidNode(object):
 
         # 멀리 보는 gap 기준
         self.free_dist      = rospy.get_param("~free_dist", 1.0)      # 100cm
-        self.fov_deg        = rospy.get_param("~fov_deg", 120.0)      # 전방 ±60도
+        self.fov_deg        = rospy.get_param("~fov_deg", 90.0)      # 전방 ±60도
         self.linear_speed   = rospy.get_param("~linear_speed", 0.20)  # 평상시 전진 속도
         self.k_ang          = rospy.get_param("~k_ang", 1.0)          # gap 조향 gain
         self.max_yaw        = rospy.get_param("~max_yaw", 1.0)        # 최대 조향 속도
