@@ -100,9 +100,9 @@ class GapAndEmergencyAvoidNode(object):
         self.max_yaw        = rospy.get_param("~max_yaw", 1.0)        # 최대 조향 속도
 
         # 30cm 안 emergency 회피 기준
-        self.emergency_dist = rospy.get_param("~emergency_dist", 0.30)  # 30cm
+        self.emergency_dist = rospy.get_param("~emergency_dist", 0.25)  # 30cm
         self.min_dist_back  = rospy.get_param("~min_dist_back", 0.14)   # 이 이하면 뒤로
-        self.scan_degree    = rospy.get_param("~scan_degree", 55.0)     # ±scan_degree 내만 근접장애물 판단
+        self.scan_degree    = rospy.get_param("~scan_degree", 50.0)     # ±scan_degree 내만 근접장애물 판단
 
         self.default_speed   = self.linear_speed
         self.backward_speed  = rospy.get_param("~backward_speed", 0.15)
