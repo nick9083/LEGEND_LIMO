@@ -37,21 +37,18 @@ class LKAS:
 
         # cmd_vel publisher
         self.ctrl_pub = rospy.Publisher("/cmd_vel_lkas", Twist, queue_size=1)
-        self.speed = 0.24
-        self.trun_mutip = 0.14
+        self.speed = 0.16
+        self.trun_mutip = 0.12
 
         # 상태 변수들
         self.start_time = rospy.get_time()
         self.nothing_flag = False
         self.cmd_vel_msg = Twist()
 
-        self.frame_skip = 3     # 3프레임 마다 계산
-        self._frame_count = 0
-
         # warp 관련 기본값
         self.img_x = 0
         self.img_y = 0
-        self.offset_x = 40  # BEV에서 좌우 여유. 필요하면 조절
+        self.offset_x = 80  # BEV에서 좌우 여유. 필요하면 조절
 
         self.enabled = True   # 기본값: FSM 없이 단독 돌릴 때도 동작하도록
         rospy.Subscriber("/lkas_enable", Bool, self.enable_cb, queue_size=1)
@@ -71,8 +68,8 @@ class LKAS:
         yellow_upper = np.array([45, 255, 255], dtype=np.uint8)
 
         # 흰색 범위
-        white_lower = np.array([0, 0, 230], dtype=np.uint8)
-        white_upper = np.array([179, 40, 255], dtype=np.uint8)
+        white_lower = np.array([0, 0, 200], dtype=np.uint8)
+        white_upper = np.array([179, 64, 255], dtype=np.uint8)
 
         # 마스크 계산
         yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
@@ -91,7 +88,7 @@ class LKAS:
         self.img_x, self.img_y = img.shape[1], img.shape[0]
 
         # src는 원본 이미지 상에서의 포인트 (사다리꼴)
-        src_center_offset = [100, 158]
+        src_center_offset = [200, 315]
         src = np.array(
             [
                 [0, self.img_y - 1],
@@ -123,10 +120,10 @@ class LKAS:
     # ---------------------------------------------------------------------
     def img_binary(self, blend_line):
         # ---- 중앙 마스크 파라미터 ----
-        center_y_ratio = 0.5     # 중앙점 세로 위치(화면 높이의 55%)
-        up_ratio = 0.7          # 중앙점에서 위로 지울 높이 비율
-        down_ratio = 0.6       # 중앙점에서 아래로 지울 높이 비율
-        half_width_ratio = 0.45  # 중앙 사각형의 좌우 반폭 비율
+        center_y_ratio = 0.55     # 중앙점 세로 위치(화면 높이의 55%)
+        up_ratio = 0.50           # 중앙점에서 위로 지울 높이 비율
+        down_ratio = 0.50         # 중앙점에서 아래로 지울 높이 비율
+        half_width_ratio = 0.30   # 중앙 사각형의 좌우 반폭 비율
 
         # 1) 기본 이진화
         gray = cv2.cvtColor(blend_line, cv2.COLOR_BGR2GRAY)
@@ -202,7 +199,7 @@ class LKAS:
         nwindows = self.nwindows
         window_height = self.window_height
         margin = 80
-        min_pix = int((margin * 2 * window_height) * 0.005)
+        min_pix = int((margin * 2 * window_height) * 0.0031)
 
         # 모든 nonzero 픽셀
         lane_y, lane_x = binary_line.nonzero()
@@ -430,15 +427,8 @@ class LKAS:
         if not self.enabled:
             return
         
-        self._frame_count += 1
-        if self._frame_count % self.frame_skip != 0:
-            return
         # 1) 이미지 변환
         img = self.bridge.compressed_imgmsg_to_cv2(data)
-
-        # === 해상도 1/2 DOWN ===
-        h, w = img.shape[:2]
-        img = cv2.resize(img, (w // 2, h // 2))
 
         # 2) 윈도우 파라미터
         self.nwindows = 10
