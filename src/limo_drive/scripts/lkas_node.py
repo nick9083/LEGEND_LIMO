@@ -6,6 +6,7 @@ from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge
 from std_msgs.msg import Bool
 
+
 import numpy as np
 import cv2
 from math import atan
@@ -36,16 +37,8 @@ class LKAS:
 
         # cmd_vel publisher
         self.ctrl_pub = rospy.Publisher("/cmd_vel_lkas", Twist, queue_size=1)
-
-        # 속도 / 조향 gain
-        self.speed = rospy.get_param("~speed", 0.16)
-        self.trun_mutip = rospy.get_param("~turn_gain", 0.12)
-
-        # ★ 추가: 해상도 스케일 & 슬라이딩 윈도우 개수
-        #  - resize_scale < 1.0 : 다운샘플
-        #  - 예) 0.5면 가로/세로 절반 → 연산량 ~1/4
-        self.resize_scale = rospy.get_param("~resize_scale", 0.5)  # 1.0이면 원본
-        self.nwindows = rospy.get_param("~nwindows", 10)
+        self.speed = 0.16
+        self.trun_mutip = 0.12
 
         # 상태 변수들
         self.start_time = rospy.get_time()
@@ -57,8 +50,7 @@ class LKAS:
         self.img_y = 0
         self.offset_x = 80  # BEV에서 좌우 여유. 필요하면 조절
 
-        # FSM에서 enable 들어옴
-        self.enabled = True
+        self.enabled = True   # 기본값: FSM 없이 단독 돌릴 때도 동작하도록
         rospy.Subscriber("/lkas_enable", Bool, self.enable_cb, queue_size=1)
 
     def enable_cb(self, msg: Bool):
@@ -432,24 +424,14 @@ class LKAS:
     # ---------------------------------------------------------------------
     def img_CB(self, data):
         now = rospy.get_time()
-
         if not self.enabled:
             return
-
+        
         # 1) 이미지 변환
         img = self.bridge.compressed_imgmsg_to_cv2(data)
 
-        # ★ 해상도 다운샘플링
-        if self.resize_scale != 1.0:
-            img = cv2.resize(
-                img,
-                None,
-                fx=self.resize_scale,
-                fy=self.resize_scale,
-                interpolation=cv2.INTER_AREA
-            )
-
         # 2) 윈도우 파라미터
+        self.nwindows = 10
         self.window_height = img.shape[0] // self.nwindows
 
         # 3) 파이프라인: warp → 색 검출 → 이진화
