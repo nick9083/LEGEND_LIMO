@@ -4,17 +4,18 @@ FROM ros:melodic-ros-base-bionic
 ENV DEBIAN_FRONTEND=noninteractive \
     ROS_PYTHON_VERSION=3
 
-# 2) Python3 + 필수 라이브러리 + 빌드 도구 + TF
+# 2) Python3 + 필수 라이브러리 + 빌드 도구 + TF + OpenCV dev
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       python3-pip python3-dev \
       python3-numpy python3-yaml python3-opencv \
+      libopencv-dev \
       build-essential cmake git \
       libboost-all-dev \
       ros-melodic-tf \
       && rm -rf /var/lib/apt/lists/*
 
-# 3) ROS Python3 유틸 (catkin_tools 없이)
+# 3) ROS Python3 유틸 (catkin_tools 없이 최소)
 RUN pip3 install --no-cache-dir \
       rospkg catkin_pkg
 
@@ -46,6 +47,7 @@ RUN chmod +x /ros_entrypoint.sh
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD ["bash"]
+
 
 
 
