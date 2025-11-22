@@ -101,8 +101,8 @@ class GapAndEmergencyAvoidNode(object):
 
         # 30cm 안 emergency 회피 기준
         self.emergency_dist = rospy.get_param("~emergency_dist", 0.30)  # 30cm
-        self.min_dist_back  = rospy.get_param("~min_dist_back", 0.10)   # 이 이하면 뒤로
-        self.scan_degree    = rospy.get_param("~scan_degree", 60.0)     # ±scan_degree 내만 근접장애물 판단
+        self.min_dist_back  = rospy.get_param("~min_dist_back", 0.14)   # 이 이하면 뒤로
+        self.scan_degree    = rospy.get_param("~scan_degree", 65.0)     # ±scan_degree 내만 근접장애물 판단
 
         self.default_speed   = self.linear_speed
         self.backward_speed  = rospy.get_param("~backward_speed", 0.15)

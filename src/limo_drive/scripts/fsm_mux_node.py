@@ -72,7 +72,7 @@ class FSMMuxNode:
 
         self.m3_force_obs_duration = rospy.get_param("~m3_force_obs_duration", 4.0)
 
-        self.v2x_phase_time      = rospy.get_param("~v2x_phase_time", 11.0)
+        self.v2x_phase_time      = rospy.get_param("~v2x_phase_time", 22.0)
         self.v2x_turn_duration   = rospy.get_param("~v2x_turn_duration", 3.0)
         self.v2x_turn_speed      = rospy.get_param("~v2x_turn_speed", 0.16)
         self.v2x_turn_yaw        = rospy.get_param("~v2x_turn_yaw", 0.4)
