@@ -71,8 +71,8 @@ class LKAS:
         yellow_upper = np.array([45, 255, 255], dtype=np.uint8)
 
         # 흰색 범위
-        white_lower = np.array([0, 0, 200], dtype=np.uint8)
-        white_upper = np.array([179, 64, 255], dtype=np.uint8)
+        white_lower = np.array([0, 0, 230], dtype=np.uint8)
+        white_upper = np.array([179, 40, 255], dtype=np.uint8)
 
         # 마스크 계산
         yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
@@ -202,7 +202,7 @@ class LKAS:
         nwindows = self.nwindows
         window_height = self.window_height
         margin = 80
-        min_pix = int((margin * 2 * window_height) * 0.0031)
+        min_pix = int((margin * 2 * window_height) * 0.005)
 
         # 모든 nonzero 픽셀
         lane_y, lane_x = binary_line.nonzero()
