@@ -38,7 +38,7 @@ class LKAS:
         # cmd_vel publisher
         self.ctrl_pub = rospy.Publisher("/cmd_vel_lkas", Twist, queue_size=1)
         self.speed = 0.16
-        self.trun_mutip = 0.12
+        self.trun_mutip = 0.14
 
         # 상태 변수들
         self.start_time = rospy.get_time()
@@ -418,8 +418,8 @@ class LKAS:
     # 속도/조향 명령 생성
     # ---------------------------------------------------------------------
     def ctrl_cmd(self, vehicle_offset):
-        self.cmd_vel_msg.linear.x = 0.16
-        self.cmd_vel_msg.angular.z = -vehicle_offset * 0.14
+        self.cmd_vel_msg.linear.x = self.speed
+        self.cmd_vel_msg.angular.z = -vehicle_offset * self.trun_mutip
         return self.cmd_vel_msg
 
     # ---------------------------------------------------------------------
