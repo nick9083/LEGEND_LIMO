@@ -5,12 +5,40 @@ import rospy
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
-from tf.transformations import euler_from_quaternion
 from std_msgs.msg import Bool   # ★ 추가: enable 게이팅용
 
 
 def clamp(x, lo, hi):
     return max(lo, min(hi, x))
+
+
+# ============================================================
+# tf 없이 쓰는 euler_from_quaternion
+# 입력: [x, y, z, w]
+# 출력: (roll, pitch, yaw)
+# ============================================================
+def euler_from_quaternion(quat):
+    x, y, z, w = quat
+
+    # roll (x축)
+    t0 = +2.0 * (w * x + y * z)
+    t1 = +1.0 - 2.0 * (x * x + y * y)
+    roll = math.atan2(t0, t1)
+
+    # pitch (y축)
+    t2 = +2.0 * (w * y - z * x)
+    if t2 > 1.0:
+        t2 = 1.0
+    if t2 < -1.0:
+        t2 = -1.0
+    pitch = math.asin(t2)
+
+    # yaw (z축)
+    t3 = +2.0 * (w * z + x * y)
+    t4 = +1.0 - 2.0 * (y * y + z * z)
+    yaw = math.atan2(t3, t4)
+
+    return roll, pitch, yaw
 
 
 class DWAObstacleAvoid:
@@ -67,9 +95,9 @@ class DWAObstacleAvoid:
         self.enabled = True  # FSM 없으면 기본 True로 단독 테스트 가능
 
         # ROS IO (토픽 이름은 파라미터로도 바꿀 수 있게)
-        scan_topic  = rospy.get_param("~scan_topic", "/scan")
-        odom_topic  = rospy.get_param("~odom_topic", "/odom")
-        cmd_topic   = rospy.get_param("~cmd_topic", "/cmd_vel_obstacle")  # ★ FSM용 출력
+        scan_topic   = rospy.get_param("~scan_topic", "/scan")
+        odom_topic   = rospy.get_param("~odom_topic", "/odom")
+        cmd_topic    = rospy.get_param("~cmd_topic", "/cmd_vel_obstacle")  # ★ FSM용 출력
         enable_topic = rospy.get_param("~enable_topic", "/obstacle_enable")  # ★ 게이팅
 
         rospy.Subscriber(scan_topic, LaserScan, self.cb_scan, queue_size=1)
@@ -105,6 +133,7 @@ class DWAObstacleAvoid:
         q = msg.pose.pose.orientation
 
         self.x, self.y = p.x, p.y
+        # ★ 여기서 우리가 만든 euler_from_quaternion 사용
         _, _, yaw = euler_from_quaternion([q.x, q.y, q.z, q.w])
         self.yaw = yaw
 
@@ -231,8 +260,10 @@ class DWAObstacleAvoid:
 
     @staticmethod
     def norm_angle(a):
-        while a > math.pi:  a -= 2*math.pi
-        while a < -math.pi: a += 2*math.pi
+        while a > math.pi:
+            a -= 2*math.pi
+        while a < -math.pi:
+            a += 2*math.pi
         return a
 
     # ========================================
