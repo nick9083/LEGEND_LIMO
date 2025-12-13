@@ -123,42 +123,31 @@ class LKAS:
         _, binary255 = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY)
 
         h, w = binary255.shape
-        binary_line = (binary255 > 0).astype(np.uint8)  # 0/1
 
-        # ---------------------------
-        # (1) Dynamic between-lanes removal ONLY
-        # ---------------------------
-        bottom_half = binary_line[h // 2 :, :]
-        histogram = np.sum(bottom_half, axis=0)
+        # (선택) 아주 약한 close로 차선 끊김만 살짝 연결 (숫자 부활 방지 위해 작게)
+        k = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        binary255 = cv2.morphologyEx(binary255, cv2.MORPH_CLOSE, k)
 
-        # 숫자(중앙) 영향 줄이려고 피크 탐색을 좌/우 구간으로 제한
-        left_search_end = int(w * 0.45)
-        right_search_start = int(w * 0.55)
+        # Connected Components로 "세로로 길고(높이 큼), 가늘거나(AR 큼)" 한 것만 유지
+        num, labels, stats, _ = cv2.connectedComponentsWithStats(binary255, connectivity=8)
 
-        left_region = histogram[:left_search_end]
-        right_region = histogram[right_search_start:]
+        out = np.zeros((h, w), dtype=np.uint8)
 
-        if left_region.size == 0 or right_region.size == 0:
-            return binary_line
+        # 기준값(너무 공격적이면 차선도 날아가서 직진만 함)
+        min_h = int(h * 0.20)      # (KR) 성분 높이 최소 / (EN) min component height
+        min_area = int(h * w * 0.0003)
+        min_ar = 2.0              # aspect ratio = height/width
 
-        left_peak = int(np.argmax(left_region))
-        right_peak = int(np.argmax(right_region) + right_search_start)
+        for i in range(1, num):
+            x, y, ww, hh, area = stats[i]
+            if area < min_area:
+                continue
+            ar = (hh / float(ww + 1e-6))
+            if (hh >= min_h) and (ar >= min_ar):
+                out[labels == i] = 1  # 0/1로 유지
 
-        left_strength = left_region[left_peak]
-        right_strength = histogram[right_peak]
+        return out
 
-        # 너무 빡세면 항상 fallback으로 빠지니, 약하게만 게이트
-        min_strength = max(10, int(0.02 * (h // 2)))  # (KR) 기존 30보다 낮춤 / (EN) less strict
-        min_gap = int(w * 0.25)
-
-        if (left_strength > min_strength) and (right_strength > min_strength) and ((right_peak - left_peak) > min_gap):
-            keep_margin = int(max(10, w * 0.03))  # 차선 보존 여유폭 (기존보다 약간 보수적으로)
-            x0 = min(w, left_peak + keep_margin)
-            x1 = max(0, right_peak - keep_margin)
-            if x0 < x1:
-                binary_line[:, x0:x1] = 0  # 차선 사이만 제거(숫자 제거)
-
-        return binary_line
 
 
     # ---------------------------------------------------------------------
