@@ -124,9 +124,9 @@ class LKAS:
     def img_binary(self, blend_line):
         # ---- 중앙 마스크 파라미터 ----
         center_y_ratio = 0.5     # 중앙점 세로 위치(화면 높이의 55%)
-        up_ratio = 0.40           # 중앙점에서 위로 지울 높이 비율
-        down_ratio = 0.40        # 중앙점에서 아래로 지울 높이 비율
-        half_width_ratio = 0.60  # 중앙 사각형의 좌우 반폭 비율
+        up_ratio = 0.00           # 중앙점에서 위로 지울 높이 비율
+        down_ratio = 0.00        # 중앙점에서 아래로 지울 높이 비율
+        half_width_ratio = 0.00  # 중앙 사각형의 좌우 반폭 비율
 
         # 1) 기본 이진화
         gray = cv2.cvtColor(blend_line, cv2.COLOR_BGR2GRAY)
