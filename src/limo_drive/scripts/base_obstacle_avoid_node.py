@@ -143,11 +143,17 @@ class Limo_obstacle_avoidence:
                 self.angle = self.default_angle
             self.speed = self.default_speed
 
-        elif self.direction in ("right_back", "left_back", "back"):
-            # 너무 가까우면 뒤로 (간단히 직선 후진)
+        elif self.direction == "right_back":
+            # If there is no gap ahead, move backward
+            self.angle = -7
+            self.speed = -0.15
+        elif self.direction == "left_back":
+            self.angle = 7
+            self.speed = -0.15
+
+        elif self.direction == "back":
             self.angle = self.default_angle
             self.speed = self.backward_speed
-
         else:
             # 장애물 없으면 직진
             self.angle = self.default_angle
