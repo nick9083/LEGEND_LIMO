@@ -121,30 +121,56 @@ class LKAS:
     # ---------------------------------------------------------------------
     # 이진화 + 중앙 영역 마스크
     # ---------------------------------------------------------------------
+    # def img_binary(self, blend_line):
+    #     # ---- 중앙 마스크 파라미터 ----
+    #     center_y_ratio = 0.5     # 중앙점 세로 위치(화면 높이의 55%)
+    #     up_ratio = 0.00           # 중앙점에서 위로 지울 높이 비율
+    #     down_ratio = 0.00        # 중앙점에서 아래로 지울 높이 비율
+    #     half_width_ratio = 0.00  # 중앙 사각형의 좌우 반폭 비율
+
+    #     # 1) 기본 이진화
+    #     gray = cv2.cvtColor(blend_line, cv2.COLOR_BGR2GRAY)
+    #     _, binary_line = cv2.threshold(gray, 0, 1, cv2.THRESH_BINARY)
+
+    #     # 2) 중앙 사각형 마스크 처리
+    #     h, w = binary_line.shape
+    #     cx = w // 2
+    #     cy = int(h * center_y_ratio)
+    #     up = int(h * up_ratio)
+    #     dn = int(h * down_ratio)
+    #     hw = int(w * half_width_ratio)
+
+    #     x0, x1 = max(0, cx - hw), min(w, cx + hw)
+    #     y0, y1 = max(0, cy - up), min(h, cy + dn)
+    #     binary_line[y0:y1, x0:x1] = 0
+
+    #     return binary_line
     def img_binary(self, blend_line):
-        # ---- 중앙 마스크 파라미터 ----
-        center_y_ratio = 0.5     # 중앙점 세로 위치(화면 높이의 55%)
-        up_ratio = 0.00           # 중앙점에서 위로 지울 높이 비율
-        down_ratio = 0.00        # 중앙점에서 아래로 지울 높이 비율
-        half_width_ratio = 0.00  # 중앙 사각형의 좌우 반폭 비율
-
-        # 1) 기본 이진화
+        # 1) 기본 이진화 (0/255)
         gray = cv2.cvtColor(blend_line, cv2.COLOR_BGR2GRAY)
-        _, binary_line = cv2.threshold(gray, 0, 1, cv2.THRESH_BINARY)
+        _, bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY)
 
-        # 2) 중앙 사각형 마스크 처리
-        h, w = binary_line.shape
-        cx = w // 2
-        cy = int(h * center_y_ratio)
-        up = int(h * up_ratio)
-        dn = int(h * down_ratio)
-        hw = int(w * half_width_ratio)
+        h, w = bw.shape
 
-        x0, x1 = max(0, cx - hw), min(w, cx + hw)
-        y0, y1 = max(0, cy - up), min(h, cy + dn)
-        binary_line[y0:y1, x0:x1] = 0
+        # 2) 너무 먼 앞(상단) 제거 -> "앞을 너무 봐서 생기는 오검출" 감소
+        #    값 올릴수록 더 가까운 영역만 봄 (0.40~0.70 사이에서 튜닝)
+        top_cut = int(h * 0.50)   # 예: 상단 50% 버림 → 하단 50%만 사용
+        bw[:top_cut, :] = 0
 
-        return binary_line
+        # 3) 중앙 제거 + 양쪽만 살리기 (숫자/문자 등 중앙 마킹 대부분 컷)
+        #    도로/카메라에 따라 튜닝 (left_end 0.35~0.50 / right_start 0.50~0.65)
+        left_end = int(w * 0.45)
+        right_start = int(w * 0.55)
+        bw[:, left_end:right_start] = 0
+
+        # 4) "세로로 긴 성분" 강조 (차선=세로로 길고, 횡단보도/숫자=가로/덩어리 성분)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 25))
+        bw = cv2.morphologyEx(bw, cv2.MORPH_OPEN, kernel)   # 작은 덩어리 제거
+        bw = cv2.morphologyEx(bw, cv2.MORPH_CLOSE, kernel)  # 끊긴 세로선 연결(약하게)
+
+        # 기존 코드가 0/1을 기대하니까 맞춰서 리턴
+        return (bw > 0).astype(np.uint8)
+
 
     # ---------------------------------------------------------------------
     # nothing일 때 기본 픽셀 위치

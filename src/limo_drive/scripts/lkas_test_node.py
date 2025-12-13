@@ -123,53 +123,86 @@ class LKAS:
         _, binary255 = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY)
 
         h, w = binary255.shape
-        binary_line = (binary255 > 0).astype(np.uint8)  # 0/1
 
-        # ------------------------------------------------------------
-        # (1) Dynamic between-lanes removal ONLY (robust)
-        # ------------------------------------------------------------
+        # (선택) 아주 약한 close로 차선 끊김만 약간 메움 (숫자 부활 방지 위해 작게)
+        k_close = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        binary255 = cv2.morphologyEx(binary255, cv2.MORPH_CLOSE, k_close)
 
-        # 1) 히스토그램은 "더 아래쪽"만 사용 (숫자/글자 영향 줄이기)
-        band_y0 = int(h * 0.65)                 # 하단 35%만
-        band = binary_line[band_y0:, :]
-        histogram = np.sum(band, axis=0).astype(np.float32)
+        # Connected Components
+        num, labels, stats, centroids = cv2.connectedComponentsWithStats(binary255, connectivity=8)
 
-        # 2) 히스토그램 스무딩(피크 안정화)
-        #    (1D를 2D로 reshape해서 가우시안 블러 적용)
-        histogram = cv2.GaussianBlur(histogram.reshape(1, -1), (1, 31), 0).ravel()
+        out = np.zeros((h, w), dtype=np.uint8)
 
-        # 3) 피크 탐색 구간을 더 바깥으로 제한 (중앙 숫자 오염 방지)
-        l0 = int(w * 0.05)
-        l1 = int(w * 0.40)
-        r0 = int(w * 0.60)
-        r1 = int(w * 0.95)
+        # -------------------------
+        # 튜닝 파라미터 (필요 시 여기만)
+        # -------------------------
+        min_area = int(h * w * 0.00025)     # 너무 작으면 노이즈
+        bottom_band = int(h * 0.18)         # 하단 18%에 닿는 성분만 (차선은 보통 하단에 존재)
+        min_len = max(18.0, h * 0.12)       # 성분의 "길이" 최소 (주축 표준편차 기반)
+        min_ecc = 8.0                       # 길쭉함(주축/부축 고유값 비율)
+        max_tilt_deg = 70.0                 # 수직에서 얼마나 기울어져도 허용할지 (곡선 대비)
+        center_exclude = int(w * 0.10)      # 화면 중앙 ±10% 폭은 숫자 가능성이 높아 억제
 
-        if (l1 <= l0) or (r1 <= r0):
-            return binary_line
+        cx0 = (w // 2) - center_exclude
+        cx1 = (w // 2) + center_exclude
 
-        left_peak = int(np.argmax(histogram[l0:l1]) + l0)
-        right_peak = int(np.argmax(histogram[r0:r1]) + r0)
+        for i in range(1, num):
+            x, y, ww, hh, area = stats[i]
+            if area < min_area:
+                continue
 
-        left_strength = float(histogram[left_peak])
-        right_strength = float(histogram[right_peak])
+            #1) 바닥 앵커: 하단 밴드에 닿는 성분만 유지 (급곡선에서도 차선은 하단에서 시작하는 경우가 많음)
+            if (y + hh) < (h - bottom_band):
+                continue
 
-        # 4) 강도 임계값: 고정값 대신 "상위 퍼센타일 기반"으로 프레임 적응
-        #    너무 빡세면 항상 아무 것도 안 해서 다시 숫자 오인/이탈이 생김
-        p90 = float(np.percentile(histogram, 90))
-        min_strength = max(10.0, p90 * 0.35)   # 상황 따라 0.25~0.45로 튜닝
-        min_gap = int(w * 0.22)                # 곡선에서 간격이 줄어도 통과되게 약간 완화
+            # 2) 중앙 억제: 숫자/문구는 중앙에 있을 확률이 매우 높음
+            cxi = centroids[i][0]
+            if (cx0 <= cxi <= cx1):
+                continue
 
-        if (left_strength > min_strength) and (right_strength > min_strength) and ((right_peak - left_peak) > min_gap):
-            keep_margin = int(max(12, w * 0.04))  # 차선 보존 여유폭 (너무 크면 곡선에서 차선이 잘림)
-            x0 = min(w, left_peak + keep_margin)
-            x1 = max(0, right_peak - keep_margin)
+            # 3) 성분 픽셀 좌표 추출 (연산은 img_binary 내부이므로 노드 구조 변경 없음)
+                ys, xs = np.where(labels == i)
+            if xs.size < 30:
+                continue
 
-            if x0 < x1:
-                # 5) 마스크는 "상부/중부까지만" 적용 → 하단 차선 시작점 보존
-                y_end = int(h * 0.85)
-                binary_line[:y_end, x0:x1] = 0
+            # 4) PCA로 길쭉함/기울기 계산
+            xm = xs.mean()
+            ym = ys.mean()
+            dx = xs - xm
+            dy = ys - ym
 
-        return binary_line
+            # 공분산(2x2)
+            sxx = float(np.mean(dx * dx))
+            syy = float(np.mean(dy * dy))
+            sxy = float(np.mean(dx * dy))
+            cov = np.array([[sxx, sxy], [sxy, syy]], dtype=np.float32)
+
+            eigvals, eigvecs = np.linalg.eigh(cov)  # 오름차순
+            l2 = float(eigvals[1]) + 1e-6           # major
+            l1 = float(eigvals[0]) + 1e-6           # minor
+
+            ecc = l2 / l1
+            if ecc < min_ecc:
+                continue
+
+            # 주축 방향 벡터 (x,y)
+            vx, vy = float(eigvecs[0, 1]), float(eigvecs[1, 1])
+
+            # 수직(0,1) 대비 기울기 각도: 0deg=수직, 90deg=수평
+            tilt = np.degrees(np.arctan2(abs(vx), abs(vy) + 1e-6))
+            if tilt > max_tilt_deg:
+                continue
+
+            # 길이(주축 표준편차 기반) 체크
+            length = np.sqrt(l2) * 2.0
+            if length < min_len:
+                continue
+
+            # 조건 통과 → 유지
+            out[labels == i] = 1
+
+        return out
+
 
 
 
