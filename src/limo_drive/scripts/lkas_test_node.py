@@ -6,7 +6,6 @@ from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge
 from std_msgs.msg import Bool
 
-
 import numpy as np
 import cv2
 from math import atan
@@ -116,7 +115,7 @@ class LKAS:
         return warp_img
 
     # ---------------------------------------------------------------------
-    # 이진화 + 중앙 영역 마스크
+    # 이진화 + (3) 구조/연속성 필터만 사용 (Connected Components 기반, 급곡선 완화)
     # ---------------------------------------------------------------------
     def img_binary(self, blend_line):
         gray = cv2.cvtColor(blend_line, cv2.COLOR_BGR2GRAY)
@@ -124,54 +123,57 @@ class LKAS:
 
         h, w = binary255.shape
 
-        # (선택) 아주 약한 close로 차선 끊김만 약간 메움 (숫자 부활 방지 위해 작게)
+        # 아주 약한 close: 끊긴 차선만 살짝 연결
         k_close = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         binary255 = cv2.morphologyEx(binary255, cv2.MORPH_CLOSE, k_close)
 
         # Connected Components
         num, labels, stats, centroids = cv2.connectedComponentsWithStats(binary255, connectivity=8)
-
         out = np.zeros((h, w), dtype=np.uint8)
 
         # -------------------------
-        # 튜닝 파라미터 (필요 시 여기만)
+        # 튜닝 파라미터 (급곡선 안정화 버전)
         # -------------------------
-        min_area = int(h * w * 0.00025)     # 너무 작으면 노이즈
-        bottom_band = int(h * 0.18)         # 하단 18%에 닿는 성분만 (차선은 보통 하단에 존재)
-        min_len = max(18.0, h * 0.12)       # 성분의 "길이" 최소 (주축 표준편차 기반)
-        min_ecc = 8.0                       # 길쭉함(주축/부축 고유값 비율)
-        max_tilt_deg = 70.0                 # 수직에서 얼마나 기울어져도 허용할지 (곡선 대비)
-        center_exclude = int(w * 0.10)      # 화면 중앙 ±10% 폭은 숫자 가능성이 높아 억제
+        min_area = int(h * w * 0.00015)      # 너무 작으면 노이즈
+        bottom_band = int(h * 0.30)          # 바닥에 덜 닿아도 허용(완화)
+        min_len = max(14.0, h * 0.08)        # 길이 조건 완화
+        min_ecc = 4.0                        # 길쭉함 조건 완화(대각/곡선 살리기)
+        max_tilt_deg = 85.0                  # 기울기 허용(급곡선/대각 대응)
 
+        # 중앙 억제는 "바닥에 충분히 안 닿는 중앙 성분"에만 강하게 적용
+        center_exclude = int(w * 0.12)
         cx0 = (w // 2) - center_exclude
         cx1 = (w // 2) + center_exclude
+        bottom_touch_strict = int(h * 0.92)  # 이 아래까지 닿으면 중앙이어도 차선 후보로 인정
 
         for i in range(1, num):
             x, y, ww, hh, area = stats[i]
             if area < min_area:
                 continue
 
-            #1) 바닥 앵커: 하단 밴드에 닿는 성분만 유지 (급곡선에서도 차선은 하단에서 시작하는 경우가 많음)
-            if (y + hh) < (h - bottom_band):
+            bottom = y + hh
+
+            # (1) 바닥 앵커
+            if bottom < (h - bottom_band):
                 continue
 
-            # 2) 중앙 억제: 숫자/문구는 중앙에 있을 확률이 매우 높음
             cxi = centroids[i][0]
-            if (cx0 <= cxi <= cx1):
+
+            # (2) 중앙 억제(단, 바닥에 충분히 닿지 않는 중앙 성분만 제거)
+            if (bottom < bottom_touch_strict) and (cx0 <= cxi <= cx1):
                 continue
 
-            # 3) 성분 픽셀 좌표 추출 (연산은 img_binary 내부이므로 노드 구조 변경 없음)
-                ys, xs = np.where(labels == i)
+            # (3) 성분 픽셀 좌표 추출 (※ 들여쓰기/위치 중요)
+            ys, xs = np.where(labels == i)
             if xs.size < 30:
                 continue
 
-            # 4) PCA로 길쭉함/기울기 계산
+            # (4) PCA로 길쭉함/기울기 계산
             xm = xs.mean()
             ym = ys.mean()
             dx = xs - xm
             dy = ys - ym
 
-            # 공분산(2x2)
             sxx = float(np.mean(dx * dx))
             syy = float(np.mean(dy * dy))
             sxy = float(np.mean(dx * dy))
@@ -198,13 +200,13 @@ class LKAS:
             if length < min_len:
                 continue
 
-            # 조건 통과 → 유지
             out[labels == i] = 1
 
+        # (5) 슬라이딩 윈도우가 잘 잡도록 성분을 살짝 두껍게
+        k_dilate = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        out = cv2.dilate(out, k_dilate, iterations=1)
+
         return out
-
-
-
 
     # ---------------------------------------------------------------------
     # nothing일 때 기본 픽셀 위치
@@ -489,7 +491,7 @@ class LKAS:
         now = rospy.get_time()
         if not self.enabled:
             return
-        
+
         # 1) 이미지 변환
         img = self.bridge.compressed_imgmsg_to_cv2(data)
 
