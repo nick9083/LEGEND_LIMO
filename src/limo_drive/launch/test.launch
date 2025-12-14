@@ -2,7 +2,7 @@
 <launch>
   <!-- LKAS -->
   <node pkg="limo_drive"
-        type="lkas_node copy.py"
+        type="lkas_node.py"
         name="lkas"
         output="screen" />
 
