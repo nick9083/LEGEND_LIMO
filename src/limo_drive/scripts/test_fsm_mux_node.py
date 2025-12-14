@@ -87,7 +87,7 @@ class FSMMuxNode:
         self.v2x_phase_time2    = rospy.get_param("~v2x_phase_time", 11.5)
 
         # 두 턴에 *각각* 쓰는 턴 지속 시간
-        self.mission5_turn_duration = rospy.get_param("~mission5_turn_duration", 0.5)
+        self.mission5_turn_duration = rospy.get_param("~mission5_turn_duration", 1.5)
         self.v2x_turn_duration      = rospy.get_param("~v2x_turn_duration", 2.8)
 
         # mission5(1단계 턴) 조향값
