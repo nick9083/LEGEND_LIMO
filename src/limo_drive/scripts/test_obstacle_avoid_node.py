@@ -215,7 +215,7 @@ class Limo_obstacle_avoidence:
         # ===== gap 기반 주행 파라미터 =====
         self.free_dist      = rospy.get_param("~free_dist", 0.7)
         self.fov_deg        = rospy.get_param("~fov_deg", 40.0)
-        self.linear_speed   = rospy.get_param("~linear_speed", 0.3)
+        self.linear_speed   = rospy.get_param("~linear_speed", 0.4)
         self.k_ang          = rospy.get_param("~k_ang", 1.0)
         self.max_yaw        = rospy.get_param("~max_yaw", 1.0)
         self.min_gap_width_m = rospy.get_param("~min_gap_width_m", 0.20)
@@ -227,7 +227,7 @@ class Limo_obstacle_avoidence:
         self.min_dist_back  = rospy.get_param("~min_dist_back", 0.17)
         self.scan_degree    = rospy.get_param("~scan_degree", 60.0)
 
-        self.default_speed  = self.linear_speed
+        self.default_speed  = 0.35
         self.backward_speed = rospy.get_param("~backward_speed", 0.15)
 
         # ===== LiDAR 상태 =====

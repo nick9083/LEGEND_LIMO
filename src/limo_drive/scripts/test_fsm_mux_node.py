@@ -24,7 +24,7 @@ class Mission3Phase(enum.Enum):
 class V2XPhase(enum.Enum):
     WAIT_START = 0    # 아직 v2x 타이머 시작 전
     COUNTING = 1      # v2x 타이머 증가 중
-    TURNING = 2       # v2x 고정 조향 구간
+    TURNING = 2       # v2x 고정 조향 구간 (1단계/2단계 공용 state)
     DONE = 3          # v2x 시퀀스 끝
 
 
@@ -69,20 +69,32 @@ class FSMMuxNode:
         # 메인 루프 주기
         self.loop_rate = rospy.get_param("~loop_rate", 30.0)
 
-        # ----- Mission3 / V2X 타이밍 파라미터 -----
-        self.m3_phase_time          = rospy.get_param("~m3_phase_time", 26)   # 첫 LKAS cmd 이후 기준
+        # ----- Mission3 타이밍 파라미터 -----
+        self.m3_phase_time          = rospy.get_param("~m3_phase_time", 26.0)   # 첫 LKAS cmd 이후 기준
         self.m3_turn_duration       = rospy.get_param("~m3_turn_duration", 2.5)
         self.m3_turn_speed          = rospy.get_param("~m3_turn_speed", 0.18)
         self.m3_turn_yaw            = rospy.get_param("~m3_turn_yaw", -0.4)
 
         # mission3 DWA 강제 구간
         self.m3_force_obs_duration  = rospy.get_param("~m3_force_obs_duration", 6.0)
-        # ★ mission3 끝난 직후 base obstacle 강제 구간
+        # mission3 끝난 직후 base obstacle 강제 구간
         self.m3_force_base_duration = rospy.get_param("~m3_force_base_duration", 7.0)
 
-        # v2x
-        self.v2x_phase_time      = rospy.get_param("~v2x_phase_time", 12.0)
-        self.v2x_turn_duration   = rospy.get_param("~v2x_turn_duration", 2.5)
+        # ===== v2x 두 단계 타이머 =====
+        # mission5: 첫 번째 v2x 턴이 시작되는 시점
+        self.mission5_phase_time = rospy.get_param("~mission5_phase_time", 1.5)
+        # v2x: 두 번째 턴이 시작되는 시점 (기존 v2x_phase_time 유지)
+        self.v2x_phase_time2    = rospy.get_param("~v2x_phase_time", 12.0)
+
+        # 두 턴에 *각각* 쓰는 턴 지속 시간
+        self.mission5_turn_duration = rospy.get_param("~mission5_turn_duration", 1)
+        self.v2x_turn_duration      = rospy.get_param("~v2x_turn_duration", 2.8)
+
+        # mission5(1단계 턴) 조향값
+        self.mission5_turn_speed = rospy.get_param("~mission5_turn_speed", 0.09)
+        self.mission5_turn_yaw   = rospy.get_param("~mission5_turn_yaw", -0.4)
+
+        # v2x(2단계 턴) 조향값 (기존 파라미터 유지)
         self.v2x_turn_speed      = rospy.get_param("~v2x_turn_speed", 0.18)
         self.v2x_turn_yaw        = rospy.get_param("~v2x_turn_yaw", 0.4)
 
@@ -108,11 +120,12 @@ class FSMMuxNode:
         self.m3_phase = Mission3Phase.BEFORE
         self.m3_turn_start_time = None
         self.m3_force_obs_start_time = None
-        self.m3_force_base_start_time = None   # ★ base 강제 구간 시작 시각
+        self.m3_force_base_start_time = None   # base 강제 구간 시작 시각
 
         self.v2x_phase = V2XPhase.WAIT_START
         self.v2x_start_time = None
         self.v2x_turn_start_time = None
+        self.v2x_step = 0   # 0: 아직 없음, 1: 1단계 턴, 2: 2단계 턴
 
         # 로그 주기
         self.log_dt = rospy.get_param("~log_dt", 0.5)
@@ -267,8 +280,8 @@ class FSMMuxNode:
         - 미션3 FORCE_BASE 시: 무조건 OBSTACLE_AVOID (base_obstacle 사용)
         - 그 외: obstacle_state True → OBSTACLE_AVOID, False → LANE_FOLLOW
         """
-        # ★ 미션3 강제 구간 (DWA + base 둘 다)에서는 장애물 상태와 관계 없이
-        #    항상 OBSTACLE_AVOID 모드 유지
+        # 미션3 강제 구간 (DWA + base 둘 다)에서는 장애물 상태와 관계 없이
+        # 항상 OBSTACLE_AVOID 모드 유지
         if self.m3_phase in (Mission3Phase.FORCE_OBS, Mission3Phase.FORCE_BASE):
             if self.current_mode != DriveMode.OBSTACLE_AVOID:
                 reason = "FORCE_OBS(mission3)" if self.m3_phase == Mission3Phase.FORCE_OBS \
@@ -286,7 +299,7 @@ class FSMMuxNode:
             rospy.loginfo("[FSM_MUX] -> LANE_FOLLOW (obstacle_state=False)")
             self.current_mode = DriveMode.LANE_FOLLOW
 
-    # ---------- V2X Phase ----------
+    # ---------- V2X Phase (2단계 TURNING) ----------
 
     def update_v2x_phase(self, now, old_mode, new_mode):
         # 1) v2x 타이머 시작 조건
@@ -299,25 +312,50 @@ class FSMMuxNode:
         ):
             self.v2x_phase = V2XPhase.COUNTING
             self.v2x_start_time = now
+            self.v2x_turn_start_time = None
+            self.v2x_step = 0
             rospy.loginfo("[FSM_MUX] v2x lab time START")
 
-        # 2) COUNTING → TURNING
+        # 2) COUNTING 상태에서 두 턴 시작 타이밍 관리
         if (
             self.v2x_phase == V2XPhase.COUNTING
             and self.v2x_start_time is not None
             and not self.obstacle_state
         ):
             t_v2x = now - self.v2x_start_time
-            if t_v2x >= self.v2x_phase_time:
+
+            # (1) 아직 아무 턴도 안 했고, mission5 시점이 되면 1단계 턴 시작
+            if self.v2x_step == 0 and t_v2x >= self.mission5_phase_time:
                 self.v2x_phase = V2XPhase.TURNING
                 self.v2x_turn_start_time = now
-                rospy.loginfo("[FSM_MUX] v2x TURNING start (t_v2x=%.1f)", t_v2x)
+                self.v2x_step = 1
+                rospy.loginfo("[FSM_MUX] v2x TURNING #1 (mission5) start (t_v2x=%.1f)", t_v2x)
 
-        # 3) TURNING → DONE
-        elif self.v2x_phase == V2XPhase.TURNING:
-            if now - self.v2x_turn_start_time >= self.v2x_turn_duration:
-                self.v2x_phase = V2XPhase.DONE
-                rospy.loginfo("[FSM_MUX] v2x sequence DONE")
+            # (2) 1단계 턴은 이미 끝났고, 두 번째 타임스탬프에 도달하면 2단계 턴 시작
+            elif self.v2x_step == 1 and t_v2x >= self.v2x_phase_time2:
+                self.v2x_phase = V2XPhase.TURNING
+                self.v2x_turn_start_time = now
+                self.v2x_step = 2
+                rospy.loginfo("[FSM_MUX] v2x TURNING #2 start (t_v2x=%.1f)", t_v2x)
+
+        # 3) TURNING 상태에서 각 턴의 지속시간 관리
+        elif self.v2x_phase == V2XPhase.TURNING and self.v2x_turn_start_time is not None:
+            dt_turn = now - self.v2x_turn_start_time
+
+            # 1단계 턴 종료 → 다시 COUNTING 상태로
+            if self.v2x_step == 1:
+                if dt_turn >= self.mission5_turn_duration:
+                    self.v2x_phase = V2XPhase.COUNTING
+                    self.v2x_turn_start_time = None
+                    # step=1 유지 → "1단계 턴은 끝났다" 표시
+                    rospy.loginfo("[FSM_MUX] v2x TURNING #1 end, back to COUNTING")
+
+            # 2단계 턴 종료 → 전체 v2x 시퀀스 끝
+            elif self.v2x_step == 2:
+                if dt_turn >= self.v2x_turn_duration:
+                    self.v2x_phase = V2XPhase.DONE
+                    self.v2x_turn_start_time = None
+                    rospy.loginfo("[FSM_MUX] v2x TURNING #2 end, sequence DONE")
 
     # ---------- 모드 / enable publish ----------
 
@@ -356,6 +394,7 @@ class FSMMuxNode:
         + Mission3 TURN / v2x TURN 구간에서는 고정 조향으로 override
         + Mission3 FORCE_OBS 구간에서는 mission3_node cmd 우선 사용
         + Mission3 FORCE_BASE 구간에서는 base_obstacle cmd 강제 사용
+        + v2x TURNING 은 1단계/2단계에 따라 서로 다른 조향값 사용
         """
         cmd = Twist()
 
@@ -392,11 +431,17 @@ class FSMMuxNode:
             cmd.linear.x = self.m3_turn_speed
             cmd.angular.z = self.m3_turn_yaw
 
-        # ----- v2x TURNING 구간: 고정 조향 override -----
+        # ----- v2x TURNING 구간: 고정 조향 override (1단계/2단계) -----
         if self.v2x_phase == V2XPhase.TURNING:
             cmd = Twist()
-            cmd.linear.x = self.v2x_turn_speed
-            cmd.angular.z = self.v2x_turn_yaw
+            if self.v2x_step == 1:
+                # mission5 (1단계 턴)
+                cmd.linear.x = self.mission5_turn_speed
+                cmd.angular.z = self.mission5_turn_yaw
+            else:
+                # 2단계 v2x 턴
+                cmd.linear.x = self.v2x_turn_speed
+                cmd.angular.z = self.v2x_turn_yaw
 
         self.cmd_pub.publish(cmd)
 

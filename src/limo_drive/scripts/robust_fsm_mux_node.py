@@ -82,7 +82,7 @@ class FSMMuxNode:
 
         # ===== v2x 두 단계 타이머 =====
         # mission5: 첫 번째 v2x 턴이 시작되는 시점
-        self.mission5_phase_time = rospy.get_param("~mission5_phase_time", 1.0)
+        self.mission5_phase_time = rospy.get_param("~mission5_phase_time", 1.5)
         # v2x: 두 번째 턴이 시작되는 시점 (기존 v2x_phase_time 유지)
         self.v2x_phase_time2    = rospy.get_param("~v2x_phase_time", 15.0)
 
@@ -92,7 +92,7 @@ class FSMMuxNode:
 
         # mission5(1단계 턴) 조향값
         self.mission5_turn_speed = rospy.get_param("~mission5_turn_speed", 0.09)
-        self.mission5_turn_yaw   = rospy.get_param("~mission5_turn_yaw", 0.4)
+        self.mission5_turn_yaw   = rospy.get_param("~mission5_turn_yaw", -0.4)
 
         # v2x(2단계 턴) 조향값 (기존 파라미터 유지)
         self.v2x_turn_speed      = rospy.get_param("~v2x_turn_speed", 0.18)
