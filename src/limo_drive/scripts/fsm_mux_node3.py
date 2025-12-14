@@ -83,8 +83,8 @@ class FSMMuxNode:
         # v2x
         self.v2x_phase_time      = rospy.get_param("~v2x_phase_time", 16.0)
         self.v2x_turn_duration   = rospy.get_param("~v2x_turn_duration", 3)
-        self.v2x_turn_speed      = rospy.get_param("~v2x_turn_speed", 0.08)
-        self.v2x_turn_yaw        = rospy.get_param("~v2x_turn_yaw", -0.03)
+        self.v2x_turn_speed      = rospy.get_param("~v2x_turn_speed", 0.15)
+        self.v2x_turn_yaw        = rospy.get_param("~v2x_turn_yaw", 0.06)
 
         # --- 상태 변수들 ---
         self.current_mode = DriveMode.LANE_FOLLOW
