@@ -209,11 +209,10 @@ include_directories(
 # catkin_add_nosetests(test)
 
 catkin_install_python(PROGRAMS
-  scripts/obstacle_detect_node.py
-  scripts/lkas_node.py
-  scripts/obstacle_avoid_node.py
-  scripts/v2x_node.py
-  scripts/fsm_mux_node.py
+  scripts/robust_obstacle_detect_node.py
+  scripts/robust_lkas_node.py
+  scripts/robust_obstacle_avoid_node.py
+  scripts/robust_fsm_mux_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
