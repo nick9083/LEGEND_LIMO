@@ -84,7 +84,7 @@ class FSMMuxNode:
         # mission5: 첫 번째 v2x 턴이 시작되는 시점
         self.mission5_phase_time = rospy.get_param("~mission5_phase_time", 1.5)
         # v2x: 두 번째 턴이 시작되는 시점 (기존 v2x_phase_time 유지)
-        self.v2x_phase_time2    = rospy.get_param("~v2x_phase_time", 12.0)
+        self.v2x_phase_time2    = rospy.get_param("~v2x_phase_time", 11.5)
 
         # 두 턴에 *각각* 쓰는 턴 지속 시간
         self.mission5_turn_duration = rospy.get_param("~mission5_turn_duration", 0.5)
