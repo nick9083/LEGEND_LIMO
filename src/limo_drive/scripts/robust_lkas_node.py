@@ -159,8 +159,8 @@ class LKAS:
 
         # 3) 중앙 제거 + 양쪽만 살리기 (숫자/문자 등 중앙 마킹 대부분 컷)
         #    도로/카메라에 따라 튜닝 (left_end 0.35~0.50 / right_start 0.50~0.65)
-        left_end = int(w * 0.35)
-        right_start = int(w * 0.5)
+        left_end = int(w * 0.4)
+        right_start = int(w * 0.6)
         bw[:, left_end:right_start] = 0
 
         # 4) "세로로 긴 성분" 강조 (차선=세로로 길고, 횡단보도/숫자=가로/덩어리 성분)
@@ -227,7 +227,7 @@ class LKAS:
         # window parameter
         nwindows = self.nwindows
         window_height = self.window_height
-        margin = 80
+        margin = 50
         min_pix = int((margin * 2 * window_height) * 0.005)
 
         # 모든 nonzero 픽셀
