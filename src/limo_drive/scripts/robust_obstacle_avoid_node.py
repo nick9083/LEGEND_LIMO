@@ -21,119 +21,183 @@ def sanitize_range(r, range_max):
     return r
 
 
+# def find_longest_free_gap_angle(msg,
+#                                 min_dist=1.0,
+#                                 fov_deg=120.0,
+#                                 min_gap_width_m=0.0,
+#                                 max_gap_width_m=999.0):
+#     """
+#     LaserScan에서 전방 fov_deg 범위 안에서
+#     min_dist(m) 이상 떨어진 구간들 중 gap들을 찾는다.
+
+#     - chosen_* : gap 폭이 [min_gap_width_m, max_gap_width_m] 안에 있는
+#                  gap들 중에서 가장 넓은 것
+#                  (없으면 chosen_center=0.0, chosen_width=0.0)
+#     - longest_*: 폭 조건 상관 없이, 전방에서 가장 '길이(인덱스 개수)'가 긴 gap
+
+#     리턴:
+#       (chosen_center_angle, chosen_width_m,
+#        longest_center_angle, longest_width_m)
+
+#     각도 단위는 rad(ROS 기준: 왼쪽 +)
+#     폭 단위는 m (대충 min_dist * 각도폭)
+#     """
+#     half = math.radians(fov_deg / 2.0)
+#     n = len(msg.ranges)
+
+#     # 조건 만족 gap 중 가장 넓은 것
+#     best_start = None
+#     best_len = 0
+#     best_width_m = 0.0
+
+#     # 디버그용: 조건 무시하고 가장 긴 gap
+#     fb_start = None
+#     fb_len = 0
+#     fb_width_m = 0.0
+
+#     cur_start = None
+
+#     def process_gap(start_idx, end_idx_exclusive):
+#         nonlocal best_start, best_len, best_width_m
+#         nonlocal fb_start, fb_len, fb_width_m
+
+#         length = end_idx_exclusive - start_idx
+#         if length <= 0:
+#             return
+
+#         angle_start = msg.angle_min + start_idx * msg.angle_increment
+#         angle_end   = msg.angle_min + (end_idx_exclusive - 1) * msg.angle_increment
+#         angle_width = abs(angle_end - angle_start)  # rad
+
+#         width_m = min_dist * angle_width
+
+#         # --- longest gap (조건 무시) 기록 ---
+#         if length > fb_len:
+#             fb_len = length
+#             fb_start = start_idx
+#             fb_width_m = width_m
+
+#         # --- 폭 조건 체크 ---
+#         if width_m < min_gap_width_m or width_m > max_gap_width_m:
+#             return
+
+#         # 조건 만족 gap 중 가장 넓은 것
+#         if width_m > best_width_m:
+#             best_width_m = width_m
+#             best_start = start_idx
+#             best_len = length
+
+#     # 메인 루프: safe 구간(gap) 찾기
+#     for i in range(n):
+#         angle = msg.angle_min + i * msg.angle_increment
+
+#         # FOV 밖이면 gap 끊기
+#         if angle < -half or angle > half:
+#             if cur_start is not None:
+#                 process_gap(cur_start, i)
+#                 cur_start = None
+#             continue
+
+#         r = sanitize_range(msg.ranges[i], msg.range_max)
+#         safe = r > min_dist  # min_dist 이상이면 "멀리까지 빈공간"
+
+#         if safe:
+#             if cur_start is None:
+#                 cur_start = i
+#         else:
+#             if cur_start is not None:
+#                 process_gap(cur_start, i)
+#                 cur_start = None
+
+#     # 마지막까지 이어진 gap 처리
+#     if cur_start is not None:
+#         process_gap(cur_start, n)
+
+#     # gap 자체가 하나도 없는 경우
+#     if fb_start is None or fb_len == 0:
+#         return 0.0, 0.0, 0.0, 0.0
+
+#     # longest gap 중심각
+#     fb_center_idx = fb_start + fb_len // 2
+#     fb_center_angle = msg.angle_min + fb_center_idx * msg.angle_increment
+
+#     # 조건 만족 gap이 없으면 chosen은 0
+#     if best_start is None or best_len == 0:
+#         chosen_center_angle = 0.0
+#         chosen_width_m = 0.0
+#     else:
+#         chosen_center_idx = best_start + best_len // 2
+#         chosen_center_angle = msg.angle_min + chosen_center_idx * msg.angle_increment
+#         chosen_width_m = best_width_m
+
+#     longest_center_angle = fb_center_angle
+#     longest_width_m = fb_width_m
+
+#     return chosen_center_angle, chosen_width_m, longest_center_angle, longest_width_m
 def find_longest_free_gap_angle(msg,
                                 min_dist=1.0,
                                 fov_deg=120.0,
                                 min_gap_width_m=0.0,
                                 max_gap_width_m=999.0):
     """
-    LaserScan에서 전방 fov_deg 범위 안에서
-    min_dist(m) 이상 떨어진 구간들 중 gap들을 찾는다.
+    ★ 변경 포인트: 기존 'free gap' 찾기 대신,
+      전방 FOV 안에서 '사용자 기준 +30도(오른쪽+)' 방향의 장애물로 헤딩할 각도를 리턴한다.
 
-    - chosen_* : gap 폭이 [min_gap_width_m, max_gap_width_m] 안에 있는
-                 gap들 중에서 가장 넓은 것
-                 (없으면 chosen_center=0.0, chosen_width=0.0)
-    - longest_*: 폭 조건 상관 없이, 전방에서 가장 '길이(인덱스 개수)'가 긴 gap
+    - 리턴 형식(4개)은 그대로 유지:
+      (chosen_center_angle, chosen_width_m, longest_center_angle, longest_width_m)
 
-    리턴:
-      (chosen_center_angle, chosen_width_m,
-       longest_center_angle, longest_width_m)
-
-    각도 단위는 rad(ROS 기준: 왼쪽 +)
-    폭 단위는 m (대충 min_dist * 각도폭)
+    - chosen_width_m은 "front에서 사용 가능" 표시용으로 0보다 크게만 준다.
+      (make_cmd_from_direction에서 width<=0이면 직진/정지로 빠지니까)
     """
+
     half = math.radians(fov_deg / 2.0)
     n = len(msg.ranges)
 
-    # 조건 만족 gap 중 가장 넓은 것
-    best_start = None
-    best_len = 0
-    best_width_m = 0.0
+    # 사용자 기준 오른쪽 +30deg  -> ROS는 왼쪽+ 이므로 -30deg
+    target_angle_ros = -math.radians(30.0)
 
-    # 디버그용: 조건 무시하고 가장 긴 gap
-    fb_start = None
-    fb_len = 0
-    fb_width_m = 0.0
+    best_i = None
+    best_score = None
 
-    cur_start = None
-
-    def process_gap(start_idx, end_idx_exclusive):
-        nonlocal best_start, best_len, best_width_m
-        nonlocal fb_start, fb_len, fb_width_m
-
-        length = end_idx_exclusive - start_idx
-        if length <= 0:
-            return
-
-        angle_start = msg.angle_min + start_idx * msg.angle_increment
-        angle_end   = msg.angle_min + (end_idx_exclusive - 1) * msg.angle_increment
-        angle_width = abs(angle_end - angle_start)  # rad
-
-        width_m = min_dist * angle_width
-
-        # --- longest gap (조건 무시) 기록 ---
-        if length > fb_len:
-            fb_len = length
-            fb_start = start_idx
-            fb_width_m = width_m
-
-        # --- 폭 조건 체크 ---
-        if width_m < min_gap_width_m or width_m > max_gap_width_m:
-            return
-
-        # 조건 만족 gap 중 가장 넓은 것
-        if width_m > best_width_m:
-            best_width_m = width_m
-            best_start = start_idx
-            best_len = length
-
-    # 메인 루프: safe 구간(gap) 찾기
     for i in range(n):
-        angle = msg.angle_min + i * msg.angle_increment
+        ang = msg.angle_min + i * msg.angle_increment
 
-        # FOV 밖이면 gap 끊기
-        if angle < -half or angle > half:
-            if cur_start is not None:
-                process_gap(cur_start, i)
-                cur_start = None
+        # FOV 밖 제외 (기존 동작 유지)
+        if ang < -half or ang > half:
             continue
 
         r = sanitize_range(msg.ranges[i], msg.range_max)
-        safe = r > min_dist  # min_dist 이상이면 "멀리까지 빈공간"
 
-        if safe:
-            if cur_start is None:
-                cur_start = i
-        else:
-            if cur_start is not None:
-                process_gap(cur_start, i)
-                cur_start = None
+        # 유효값만
+        if not math.isfinite(r) or r <= 0.01:
+            continue
 
-    # 마지막까지 이어진 gap 처리
-    if cur_start is not None:
-        process_gap(cur_start, n)
+        # "타겟 각도에 가까운 것"을 최우선, 그 다음 거리(가까울수록)로 선택
+        # (각도 우선이라 30도 쪽에 장애물이 있으면 그쪽으로 감)
+        score = abs(ang - target_angle_ros) * 10.0 + r
 
-    # gap 자체가 하나도 없는 경우
-    if fb_start is None or fb_len == 0:
+        if best_score is None or score < best_score:
+            best_score = score
+            best_i = i
+
+    # FOV 안에 쓸만한 포인트가 없으면 기존과 동일하게 0 리턴
+    if best_i is None:
         return 0.0, 0.0, 0.0, 0.0
 
-    # longest gap 중심각
-    fb_center_idx = fb_start + fb_len // 2
-    fb_center_angle = msg.angle_min + fb_center_idx * msg.angle_increment
+    chosen_center_angle = msg.angle_min + best_i * msg.angle_increment
 
-    # 조건 만족 gap이 없으면 chosen은 0
-    if best_start is None or best_len == 0:
-        chosen_center_angle = 0.0
-        chosen_width_m = 0.0
+    # front에서 "유효"로 인식시키기 위한 width (>0)
+    if max_gap_width_m > min_gap_width_m:
+        chosen_width_m = 0.5 * (min_gap_width_m + max_gap_width_m)
     else:
-        chosen_center_idx = best_start + best_len // 2
-        chosen_center_angle = msg.angle_min + chosen_center_idx * msg.angle_increment
-        chosen_width_m = best_width_m
+        chosen_width_m = max(min_gap_width_m, 0.001)
 
-    longest_center_angle = fb_center_angle
-    longest_width_m = fb_width_m
+    # longest_*는 이 코드에선 안 쓰니까 chosen과 동일하게 채움(형식 유지)
+    longest_center_angle = chosen_center_angle
+    longest_width_m = chosen_width_m
 
     return chosen_center_angle, chosen_width_m, longest_center_angle, longest_width_m
+
 
 
 # ---------------- 메인 클래스 ----------------
