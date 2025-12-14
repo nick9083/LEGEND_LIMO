@@ -97,7 +97,7 @@ class Mission3GapAndEmergencyAvoidNode(object):
         # 멀리 보는 gap 기준 (알고리즘/값 그대로)
         self.free_dist      = rospy.get_param("~free_dist", 0.9)       # 90cm
         self.fov_deg        = rospy.get_param("~fov_deg", 120.0)       # 전방 ±60도
-        self.linear_speed   = rospy.get_param("~linear_speed", 0.20)   # 평상시 전진 속도
+        self.linear_speed   = rospy.get_param("~linear_speed", 0.30)   # 평상시 전진 속도
         self.k_ang          = rospy.get_param("~k_ang", 1.0)           # gap 조향 gain
         self.max_yaw        = rospy.get_param("~max_yaw", 1.0)         # 최대 조향 속도
 
@@ -106,7 +106,7 @@ class Mission3GapAndEmergencyAvoidNode(object):
         self.min_dist_back  = rospy.get_param("~min_dist_back", 0.20)   # 이 이하면 뒤로
         self.scan_degree    = rospy.get_param("~scan_degree", 55.0)     # ±scan_degree 내만 근접장애물 판단
 
-        self.default_speed   = self.linear_speed
+        self.default_speed   = 0.2
         self.backward_speed  = rospy.get_param("~backward_speed", 0.15)
 
         # LiDAR 관련 상태

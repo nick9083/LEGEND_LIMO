@@ -37,7 +37,7 @@ class LKAS:
 
         # cmd_vel publisher
         self.ctrl_pub = rospy.Publisher("/cmd_vel_lkas", Twist, queue_size=1)
-        self.speed = 0.18
+        self.speed = 0.25
         self.trun_mutip = 0.14
 
         # 상태 변수들
