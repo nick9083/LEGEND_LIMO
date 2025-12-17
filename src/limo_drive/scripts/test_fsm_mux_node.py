@@ -84,7 +84,7 @@ class FSMMuxNode:
         # mission5: 첫 번째 v2x 턴이 시작되는 시점
         self.mission5_phase_time = rospy.get_param("~mission5_phase_time", 1.5)
         # v2x: 두 번째 턴이 시작되는 시점 (기존 v2x_phase_time 유지)
-        self.v2x_phase_time2    = rospy.get_param("~v2x_phase_time", 11.5)
+        self.v2x_phase_time2    = rospy.get_param("~v2x_phase_time", 5.5)
 
         # 두 턴에 *각각* 쓰는 턴 지속 시간
         self.mission5_turn_duration = rospy.get_param("~mission5_turn_duration", 3)
@@ -96,7 +96,7 @@ class FSMMuxNode:
 
         # v2x(2단계 턴) 조향값 (기존 파라미터 유지)
         self.v2x_turn_speed      = rospy.get_param("~v2x_turn_speed", 0.1)
-        self.v2x_turn_yaw        = rospy.get_param("~v2x_turn_yaw", -0.04)
+        self.v2x_turn_yaw        = rospy.get_param("~v2x_turn_yaw", -0.07)
 
         # --- 상태 변수들 ---
         self.current_mode = DriveMode.LANE_FOLLOW
