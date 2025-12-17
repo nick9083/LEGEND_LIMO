@@ -22,10 +22,10 @@ class BlackROI_ScanSteer:
 
         # topics
         self.image_topic = rospy.get_param("~image_topic", "/camera/rgb/image_raw/compressed")
-        self.cmd_topic = rospy.get_param("~cmd_topic", "/cmd_vel_lkas")  # ✅ default 변경
+        self.cmd_topic   = rospy.get_param("~cmd_topic", "/cmd_vel_lkas")  # ✅ /cmd_vel_lkas
         self.enable_topic = rospy.get_param("~enable_topic", "/lkas_enable")
 
-        # enable gate
+        # enable
         self.enabled = bool(rospy.get_param("~enabled_default", True))
         rospy.Subscriber(self.enable_topic, Bool, self._enable_cb, queue_size=1)
 
@@ -35,7 +35,7 @@ class BlackROI_ScanSteer:
         # scale
         self.scale = float(rospy.get_param("~scale", 0.5))
 
-        # --- unified params ---
+        # --- unified params (원본 그대로) ---
         self.black_thr = int(rospy.get_param("~black_thr", 180))
         self.top_cut_ratio = float(rospy.get_param("~top_cut_ratio", 0.30))
         self.bottom_cut_ratio = float(rospy.get_param("~bottom_cut_ratio", 0.00))
@@ -49,28 +49,18 @@ class BlackROI_ScanSteer:
         self.min_width = int(rospy.get_param("~min_width", 10))
 
         # scanline params
-        self.y_start = int(rospy.get_param("~y_start", 180))
+        self.y_start = int(rospy.get_param("~y_start", 160))
         self.y_gap = int(rospy.get_param("~y_gap", 10))
-        self.num_points = int(rospy.get_param("~num_points", 11))
+        self.num_points = int(rospy.get_param("~num_points", 9))
 
-        # =========================
-        # (A) 기존 "엣지 마진" 조건
-        # =========================
-        self.edge_margin_px = int(rospy.get_param("~edge_margin_px",
-                               rospy.get_param("~space_margin_px", 5)))
+        # “끝점 여유” 조건
+        self.space_margin_px = int(rospy.get_param("~space_margin_px", 100))
         self.require_margin_all_points = bool(rospy.get_param("~require_margin_all_points", True))
         self.min_span_px = int(rospy.get_param("~min_span_px", 30))
 
+        # 빨간 점도 조향에 포함할지 + 가중치
         self.use_red_points = bool(rospy.get_param("~use_red_points", True))
-        self.edge_red_weight = float(rospy.get_param("~edge_red_weight",
-                                   rospy.get_param("~red_weight", 0.1)))
-
-        # =========================
-        # (B) 새 "미들(센터) 조건" (왼쪽 점 xl만!)
-        # =========================
-        self.use_middle_points = bool(rospy.get_param("~use_middle_points", True))
-        self.middle_margin_px = int(rospy.get_param("~middle_margin_px", 10))
-        self.middle_weight = float(rospy.get_param("~middle_weight", self.edge_red_weight))
+        self.red_weight = float(rospy.get_param("~red_weight", 0.7))
 
         # steering params
         self.publish_cmd = bool(rospy.get_param("~publish_cmd", True))
@@ -78,13 +68,13 @@ class BlackROI_ScanSteer:
         self.steer_gain = float(rospy.get_param("~steer_gain", 0.018))
         self.max_steer = float(rospy.get_param("~max_steer", 2))
 
-        # follow y
+        # 곡선을 어디서 따라갈지 (기본: y_start)
         self.y_follow = int(rospy.get_param("~y_follow", self.y_start))
 
         # polyfit
         self.poly_degree = int(rospy.get_param("~poly_degree", 2))
 
-        # hold
+        # y_start에서 실패해도 "무조건 조향" 출력 위해 hold
         self.hold_last_when_fail = bool(rospy.get_param("~hold_last_when_fail", True))
         self.hold_decay = float(rospy.get_param("~hold_decay", 0.90))
         self._last_steer = 0.0
@@ -100,17 +90,16 @@ class BlackROI_ScanSteer:
         self._last_cmd_time = rospy.get_time()
 
         rospy.loginfo(
-            "[scansteer] enable_topic=%s cmd_topic=%s scale=%.2f thr=%d y_start=%d gap=%d n=%d y_follow=%d "
-            "edge_margin=%d edge_w=%.2f use_middle=%d middle_margin=%d middle_w=%.2f",
+            "[scansteer] enable_topic=%s cmd_topic=%s scale=%.2f thr=%d y_start=%d gap=%d n=%d y_follow=%d margin=%d use_red=%d red_w=%.2f",
             self.enable_topic, self.cmd_topic,
             self.scale, self.black_thr, self.y_start, self.y_gap, self.num_points,
-            self.y_follow, self.edge_margin_px, self.edge_red_weight,
-            int(self.use_middle_points), self.middle_margin_px, self.middle_weight
+            self.y_follow, self.space_margin_px, int(self.use_red_points), self.red_weight
         )
 
     def _enable_cb(self, msg: Bool):
         self.enabled = msg.data
 
+    # ---------- callback: scale FIRST ----------
     def _img_cb(self, msg: CompressedImage):
         try:
             bgr0 = self.bridge.compressed_imgmsg_to_cv2(msg)
@@ -174,28 +163,12 @@ class BlackROI_ScanSteer:
         return (labels == best_idx).astype(np.uint8)  # 0/1
 
     def scan_row_lr_center(self, bin01, y, w):
-        """
-        우편향 스캔:
-        - xr: 해당 y줄에서 가장 오른쪽(최대 x)의 1
-        - xl: xr에서 왼쪽으로 이동하면서 '연속 1 구간'이 끝나는 지점 다음(=오른쪽 덩어리의 시작)
-
-        반환:
-        xl, xr, xc,
-        left_ok, right_ok, has_space,
-        middle_bad (왼쪽 점 xl만 중앙/근처에 걸리면 True),
-        middle_thr_x
-        """
-        row = bin01[y, :]
-        xs = np.flatnonzero(row)
+        xs = np.flatnonzero(bin01[y, :])
         if xs.size == 0:
             return None
 
+        xl = int(xs[0])
         xr = int(xs[-1])
-
-        x = xr
-        while x >= 0 and row[x] != 0:
-            x -= 1
-        xl = x + 1
 
         span = xr - xl
         if span < self.min_span_px:
@@ -203,17 +176,10 @@ class BlackROI_ScanSteer:
 
         left_margin = xl
         right_margin = (w - 1) - xr
-
-        left_ok = (left_margin >= self.edge_margin_px)
-        right_ok = (right_margin >= self.edge_margin_px)
-        has_space = (left_ok or right_ok)
-
-        img_cx = 0.5 * (w - 1)
-        middle_thr_x = img_cx - float(max(0, self.middle_margin_px))
-        middle_bad = (xl >= middle_thr_x)
+        has_space = (left_margin >= self.space_margin_px) or (right_margin >= self.space_margin_px)
 
         xc = 0.5 * (xl + xr)
-        return xl, xr, xc, left_ok, right_ok, has_space, middle_bad, middle_thr_x
+        return xl, xr, xc, has_space
 
     def compute_scan_points(self, bin01):
         h, w = bin01.shape[:2]
@@ -228,49 +194,28 @@ class BlackROI_ScanSteer:
         weights = []
         lr_list = []
 
-        # pt_src: 0=미사용, 1=strong(1.0), 2=edge_red, 3=middle
         for idx, y in enumerate(ys):
             out = self.scan_row_lr_center(bin01, y, w)
             if out is None:
-                lr_list.append((None, None, y, False, False, False, False, False, None, 0, None))
+                lr_list.append((None, None, y, False, False))
                 continue
 
-            xl, xr, xc, left_ok, right_ok, has_space, middle_bad, middle_thr_x = out
+            xl, xr, xc, has_space = out
 
             if idx == 0:
                 valid = has_space
             else:
                 valid = (has_space if self.require_margin_all_points else True)
 
-            pt_weight = None
-            pt_src = 0
+            lr_list.append((xl, xr, y, has_space, valid))
 
-            # 우선순위:
-            # (1) middle_bad면 middle_weight
-            # (2) 아니면 valid면 1.0
-            # (3) 아니면 edge_red_weight
-            if self.use_middle_points and middle_bad:
+            if valid:
                 points.append((float(xc), float(y)))
-                weights.append(float(self.middle_weight))
-                pt_weight = float(self.middle_weight)
-                pt_src = 3
+                weights.append(1.0)
             else:
-                if valid:
+                if self.use_red_points:
                     points.append((float(xc), float(y)))
-                    weights.append(1.0)
-                    pt_weight = 1.0
-                    pt_src = 1
-                else:
-                    if self.use_red_points:
-                        points.append((float(xc), float(y)))
-                        weights.append(float(self.edge_red_weight))
-                        pt_weight = float(self.edge_red_weight)
-                        pt_src = 2
-                    else:
-                        pt_weight = None
-                        pt_src = 0
-
-            lr_list.append((xl, xr, y, left_ok, right_ok, has_space, valid, middle_bad, pt_weight, pt_src, middle_thr_x))
+                    weights.append(float(self.red_weight))
 
         return points, weights, lr_list, (h, w)
 
@@ -302,6 +247,7 @@ class BlackROI_ScanSteer:
         x_target = float(max(0.0, min(float(w - 1), x_target)))
 
         offset_px = x_target - img_cx
+
         steer = float(-offset_px * self.steer_gain)
         steer = max(-self.max_steer, min(self.max_steer, steer))
 
