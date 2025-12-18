@@ -215,7 +215,7 @@ class Limo_obstacle_avoidence:
         # ===== gap 기반 주행 파라미터 =====
         self.free_dist      = rospy.get_param("~free_dist", 0.6)
         self.fov_deg        = rospy.get_param("~fov_deg", 20.0)
-        self.linear_speed   = rospy.get_param("~linear_speed", 0.4)
+        self.linear_speed   = rospy.get_param("~linear_speed", 0.5)
         self.k_ang          = rospy.get_param("~k_ang", 1.0)
         self.max_yaw        = rospy.get_param("~max_yaw", 1.0)
         self.min_gap_width_m = rospy.get_param("~min_gap_width_m", 0.20)
