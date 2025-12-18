@@ -16,7 +16,7 @@ class Detect:
     def __init__(self):
         # 파라미터: 필요하면 launch에서 ~네임스페이스 기준으로 override
         self.FOV_degree = rospy.get_param("~fov_degree", 55.0)       # 전방 시야각(±deg)
-        self.FOV_range = rospy.get_param("~fov_range", 0.40)          # 장애물 판단 거리(m)
+        self.FOV_range = rospy.get_param("~fov_range", 0.35)          # 장애물 판단 거리(m)
         self.filter_degree = rospy.get_param("~filter_degree", 1.0)  # 잡음 필터용 최소 각도 차
         self.standard_degree = rospy.get_param("~standard_degree", 10.0)
 
