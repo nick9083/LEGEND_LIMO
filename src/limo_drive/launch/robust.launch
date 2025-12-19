@@ -41,7 +41,7 @@
 
   <!-- FSM / MUX -->
   <node pkg="limo_drive"
-        type="test_fsm_mux_node.py"
+        type="robust_fsm_mux_node.py"
         name="fsm_mux"
         output="screen" />
 </launch>
