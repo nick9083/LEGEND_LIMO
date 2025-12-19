@@ -14,7 +14,7 @@
 
   <!-- base obstacle_avoid (short distance greedy avoid) -->
   <node pkg="limo_drive"
-        type="robust_obstacle_avoid_node.py"
+        type="test_obstacle_avoid_node.py"
         name="base_obstacle_avoid"
         output="screen">
     <!-- LiDAR 입력 -->
