@@ -70,7 +70,7 @@ class FSMMuxNode:
         self.loop_rate = rospy.get_param("~loop_rate", 30.0)
 
         # ----- Mission3 타이밍 파라미터 -----
-        self.m3_phase_time          = rospy.get_param("~m3_phase_time", 13.4)   # 첫 LKAS cmd 이후 기준
+        self.m3_phase_time          = rospy.get_param("~m3_phase_time", 1)   # 첫 LKAS cmd 이후 기준
         self.m3_turn_duration       = rospy.get_param("~m3_turn_duration", 0)
         self.m3_turn_speed          = rospy.get_param("~m3_turn_speed", 0.0)
         self.m3_turn_yaw            = rospy.get_param("~m3_turn_yaw", 0.0)
