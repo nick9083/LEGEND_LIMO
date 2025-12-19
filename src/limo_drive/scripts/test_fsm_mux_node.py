@@ -76,7 +76,7 @@ class FSMMuxNode:
         self.m3_turn_yaw            = rospy.get_param("~m3_turn_yaw", -0.4)
 
         # mission3 DWA 강제 구간
-        self.m3_force_obs_duration  = rospy.get_param("~m3_force_obs_duration", 4.0)
+        self.m3_force_obs_duration  = rospy.get_param("~m3_force_obs_duration", 3.5)
         # mission3 끝난 직후 base obstacle 강제 구간
         self.m3_force_base_duration = rospy.get_param("~m3_force_base_duration", 0.0)
 
