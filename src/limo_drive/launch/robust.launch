@@ -2,7 +2,7 @@
 <launch>
   <!-- LKAS -->
   <node pkg="limo_drive"
-        type="robust_lkas_node.py"
+        type="test_lkas_node.py"
         name="lkas"
         output="screen" />
 
@@ -14,7 +14,7 @@
 
   <!-- base obstacle_avoid (short distance greedy avoid) -->
   <node pkg="limo_drive"
-        type="robust_obstacle_avoid_node.py"
+        type="test_obstacle_avoid_node.py"
         name="base_obstacle_avoid"
         output="screen">
     <!-- LiDAR 입력 -->
@@ -27,7 +27,7 @@
 
   <!-- mission3 노드 (long distance greedy DWA) -->
   <node pkg="limo_drive"
-        type="robust_mission3_node.py"
+        type="test_mission3_node.py"
         name="mission3_dwa"
         output="screen">
     <!-- 동일하게 LiDAR + odom -->
@@ -41,7 +41,7 @@
 
   <!-- FSM / MUX -->
   <node pkg="limo_drive"
-        type="robust_fsm_mux_node.py"
+        type="test_fsm_mux_node.py"
         name="fsm_mux"
         output="screen" />
 </launch>
