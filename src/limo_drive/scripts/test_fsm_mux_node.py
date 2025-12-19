@@ -70,13 +70,13 @@ class FSMMuxNode:
         self.loop_rate = rospy.get_param("~loop_rate", 30.0)
 
         # ----- Mission3 타이밍 파라미터 -----
-        self.m3_phase_time          = rospy.get_param("~m3_phase_time", 13.4)   # 첫 LKAS cmd 이후 기준
+        self.m3_phase_time          = rospy.get_param("~m3_phase_time", 13.8)   # 첫 LKAS cmd 이후 기준
         self.m3_turn_duration       = rospy.get_param("~m3_turn_duration", 2.5)
         self.m3_turn_speed          = rospy.get_param("~m3_turn_speed", 0.18)
         self.m3_turn_yaw            = rospy.get_param("~m3_turn_yaw", -0.4)
 
         # mission3 DWA 강제 구간
-        self.m3_force_obs_duration  = rospy.get_param("~m3_force_obs_duration", 3.5)
+        self.m3_force_obs_duration  = rospy.get_param("~m3_force_obs_duration", 1.5)
         # mission3 끝난 직후 base obstacle 강제 구간
         self.m3_force_base_duration = rospy.get_param("~m3_force_base_duration", 0.0)
 
